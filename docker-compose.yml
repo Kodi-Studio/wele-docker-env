@@ -1,0 +1,62 @@
+version: "3.8"
+services:
+  db:
+    image: mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: wele_literie
+    ports:
+      - "3308:3306"
+    networks:
+        - dev
+    volumes:
+        - ./db-data-wele:/var/lib/mysql
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    restart: always
+    #environment:
+      # PMA_HOST: db
+      # PMA_USER: root
+      # PMA_PASSWORD: root
+    ports:
+      - "8080:80"
+    networks:
+        - dev
+  maildev:
+    image: maildev/maildev
+    container_name: maildev_docker_wele
+    command: bin/maildev --web 80 --smtp 25 --hide-extensions STARTTLS
+    ports:
+      - "8082:80"
+    restart: always
+    networks:
+        - dev
+         
+  www:
+    build: "php.apache"
+    # env_file: project/.env
+    container_name: www_docker_wele
+    ports:
+      - "1600:80"
+    volumes:  
+        #- ./8.0/php.ini:/usr/local/etc/php/php.ini
+        - ./php.apache/conf:/etc/apache2/sites-enabled
+        - ./project:/var/www
+    restart: always
+    networks:
+        - dev
+    environment:
+      APP_ENV: "dev"
+      APP_DEBUG: "0"
+      APP_SECRET: "EDITME"
+      DATABASE_URL: mysql://root:root@db/wele_literie
+
+
+networks: 
+  dev:
+
+
+#volumes:
+  #db-data-wele:  
+
