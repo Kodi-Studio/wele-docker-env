@@ -1,5 +1,37 @@
 version: "3.8"
 services:
+  traefik:
+    image: "traefik:v2.5"
+    container_name: "traefik"
+    command:
+      #- "--log.level=DEBUG"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - $PWD/traefik.toml:/etc/traefik/traefik.toml
+      - $PWD/acme.json:/acme.json
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`www.wele.fr`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+      - "traefik.http.routers.api.service=api@internal"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.middlewares=auth"
+      - "traefik.http.middlewares.auth.basicauth.users=admin:$$apr1$$RHNoxtd9$$Y8RoCSL10ymRaYeEe4mJL/"
+      - "traefik.http.middlewares.strip-www.redirectregex.regex=^https?://(?:www\\.)?(.+)"
+      - "traefik.http.middlewares.strip-www.redirectregex.replacement=https://www.$${1}"
+      #- "traefik.http.middlewares.strip-www.redirectregex.regex=^https?://www\\.(.+)"
+      #- "traefik.http.middlewares.strip-www.redirectregex.replacement=https://$${1}"
+      - "traefik.http.middlewares.strip-www.redirectregex.permanent=true"
+    networks:
+      - web
+
   db:
     image: mysql
     restart: always
@@ -9,7 +41,7 @@ services:
     ports:
       - "3308:3306"
     networks:
-        - dev
+        - web
     volumes:
         - ./db-data-wele:/var/lib/mysql
   phpmyadmin:
@@ -20,9 +52,9 @@ services:
       # PMA_USER: root
       # PMA_PASSWORD: root
     ports:
-      - "8080:80"
+      - "8081:80"
     networks:
-        - dev
+        - web
   maildev:
     image: maildev/maildev
     container_name: maildev_docker_wele
@@ -31,21 +63,26 @@ services:
       - "8082:80"
     restart: always
     networks:
-        - dev
-         
+        - web  
   www:
     build: "php.apache"
     # env_file: project/.env
     container_name: www_docker_wele
-    ports:
-      - "1600:80"
-    volumes:  
+    #ports:
+    #  - "80:80"
+    labels:
+      - "traefik.enable=true"
+      #- "traefik.http.routers.www_docker_wele.rule=Host(`wele.fr`)"
+      - "traefik.http.routers.www_docker_wele.entrypoints=websecure"
+      - "traefik.http.routers.blog.rule=Host(`www.wele.fr`, `wele.fr`)"
+      - "traefik.http.routers.blog.middlewares=strip-www"
+    volumes:
         #- ./8.0/php.ini:/usr/local/etc/php/php.ini
         - ./php.apache/conf:/etc/apache2/sites-enabled
         - ./project:/var/www
     restart: always
     networks:
-        - dev
+        - web
     environment:
       APP_ENV: "dev"
       APP_DEBUG: "0"
@@ -53,8 +90,9 @@ services:
       DATABASE_URL: mysql://root:root@db/wele_literie
 
 
-networks: 
-  dev:
+networks:
+  web:
+    external: false
 
 
 #volumes:
